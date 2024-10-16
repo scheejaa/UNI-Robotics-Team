@@ -1,36 +1,46 @@
 #include <ESP32Servo.h>
 #include <ps5Controller.h>
 
+// Define servo objects for each wheel
 Servo servoFrontLeft;
 Servo servoFrontRight;
 Servo servoRearLeft;
 Servo servoRearRight;
 
+// Define pin numbers for each servo
 #define SERVO_FRONT_LEFT_PIN 19
 #define SERVO_FRONT_RIGHT_PIN 20
 #define SERVO_REAR_LEFT_PIN 21
 #define SERVO_REAR_RIGHT_PIN 22
 #define FREEZE_BUTTON_PIN 23 // Define the pin for the freeze button
 
+// Variables to manage timing and states
 unsigned long lastTimeStamp = 0;
-bool autonomousMode = false;
-bool isFrozen = false;
-unsigned long freezeStartTime = 0;
+bool autonomousMode = false; // Flag to indicate if the robot is in autonomous mode
+bool isFrozen = false; // Flag to indicate if the robot is frozen
+unsigned long freezeStartTime = 0; // Timestamp when the robot was frozen
+unsigned long autonomousStartTime = 0; // Timestamp when autonomous mode started
 
 void setup() {
+  // Attach servos to their respective pins
   servoFrontLeft.attach(SERVO_FRONT_LEFT_PIN);
   servoFrontRight.attach(SERVO_FRONT_RIGHT_PIN);
   servoRearLeft.attach(SERVO_REAR_LEFT_PIN);
   servoRearRight.attach(SERVO_REAR_RIGHT_PIN);
   
-  pinMode(FREEZE_BUTTON_PIN, INPUT_PULLUP); // Initialize the freeze button pin
+  // Initialize the freeze button pin as input with pull-up resistor
+  pinMode(FREEZE_BUTTON_PIN, INPUT_PULLUP);
   
+  // Initialize serial communication for debugging
   Serial.begin(115200);
+  
+  // Initialize PS5 controller and attach event handlers
   ps5.attach(notify);
   ps5.attachOnConnect(onConnect);
   ps5.attachOnDisconnect(onDisConnect);
-  ps5.begin("24:a6:fa:ca:d0:75"); // your PS5 controller MAC address
+  ps5.begin("24:a6:fa:ca:d0:75"); // Replace with your PS5 controller MAC address
   
+  // Wait for the PS5 controller to connect
   while (!ps5.isConnected()) {
     Serial.println("PS5 controller not found");
     delay(300);
@@ -38,7 +48,72 @@ void setup() {
   Serial.println("Ready.");
 }
 
+void loop() {
+  // Check if the Options button is pressed to start autonomous mode
+  if (ps5.Options()) {
+    autonomousMode = true; // Set autonomous mode flag
+    autonomousStartTime = millis(); // Record the start time of autonomous mode
+    delay(500); // Debounce delay to prevent multiple triggers
+  }
+  
+  // Check if the freeze button is pressed
+  if (digitalRead(FREEZE_BUTTON_PIN) == LOW && !isFrozen) {
+    isFrozen = true; // Set frozen flag
+    freezeStartTime = millis(); // Record the time when the robot was frozen
+    Serial.println("Robot frozen!");
+  }
+  
+  // Check if the freeze duration (15 seconds) has elapsed
+  if (isFrozen && millis() - freezeStartTime >= 15000) {
+    isFrozen = false; // Unfreeze the robot
+    Serial.println("Robot unfrozen!");
+  }
+  
+  // Check if the autonomous period (20 seconds) has elapsed
+  if (autonomousMode && millis() - autonomousStartTime >= 20000) {
+    autonomousMode = false; // Switch back to driver control
+    Serial.println("Switching to driver control.");
+  }
+  
+  // Control the robot based on the current mode and state
+  if (!isFrozen) {
+    if (autonomousMode) {
+      runAutonomous(); // Run autonomous mode
+    } else {
+      controlMotors(); // Run manual control mode
+    }
+  }
+}
+
+void controlMotors() {
+  // Manual control code using PS5 controller inputs
+  int leftStickY = ps5.LStickY();
+  int leftStickX = ps5.LStickX();
+  int rightStickX = ps5.RStickX();
+  
+  // Map PS5 controller inputs to servo values
+  int frontLeftServoValue = map(leftStickY + leftStickX + rightStickX, -384, 384, 500, 2500);
+  int frontRightServoValue = map(leftStickY - leftStickX - rightStickX, -384, 384, 500, 2500);
+  int rearLeftServoValue = map(leftStickY - leftStickX + rightStickX, -384, 384, 500, 2500);
+  int rearRightServoValue = map(leftStickY + leftStickX - rightStickX, -384, 384, 500, 2500);
+  
+  // Write the mapped values to the servos
+  servoFrontLeft.writeMicroseconds(frontLeftServoValue);
+  servoFrontRight.writeMicroseconds(frontRightServoValue);
+  servoRearLeft.writeMicroseconds(rearLeftServoValue);
+  servoRearRight.writeMicroseconds(rearRightServoValue);
+}
+
+void runAutonomous() {
+  // Simple autonomous code to move forward
+  servoFrontLeft.writeMicroseconds(1500);
+  servoFrontRight.writeMicroseconds(1500);
+  servoRearLeft.writeMicroseconds(1500);
+  servoRearRight.writeMicroseconds(1500);
+}
+
 void notify() {
+  // Print PS5 controller inputs for debugging
   char messageString;
   sprintf(messageString, "%4d,%4d,%4d,%4d,%3d,%3d,%3d,%3d,%3d,%3d,%3d,%3d,%3d,%3d,%3d,%3d,%3d,%3d,%3d,%3d,%3d,%3d,%3d,%3d",
           ps5.LStickX(), ps5.LStickY(), ps5.RStickX(), ps5.RStickY(),
@@ -52,65 +127,13 @@ void notify() {
     Serial.println(messageString);
     lastTimeStamp = millis();
   }
-  controlMotors();
-}
-
-void controlMotors() {
-  if (isFrozen) {
-    // If the robot is frozen, do nothing
-    return;
-  }
-  
-  if (autonomousMode) {
-    runAutonomous();
-  } else {
-    int leftStickY = ps5.LStickY();
-    int leftStickX = ps5.LStickX();
-    int rightStickX = ps5.RStickX();
-    
-    int frontLeftServoValue = map(leftStickY + leftStickX + rightStickX, -384, 384, 500, 2500);
-    int frontRightServoValue = map(leftStickY - leftStickX - rightStickX, -384, 384, 500, 2500);
-    int rearLeftServoValue = map(leftStickY - leftStickX + rightStickX, -384, 384, 500, 2500);
-    int rearRightServoValue = map(leftStickY + leftStickX - rightStickX, -384, 384, 500, 2500);
-    
-    servoFrontLeft.writeMicroseconds(frontLeftServoValue);
-    servoFrontRight.writeMicroseconds(frontRightServoValue);
-    servoRearLeft.writeMicroseconds(rearLeftServoValue);
-    servoRearRight.writeMicroseconds(rearRightServoValue);
-  }
-}
-
-void runAutonomous() {
-  // Autonomous code here
+  controlMotors(); // Ensure manual control is updated
 }
 
 void onConnect() {
-  Serial.println("Connected!");
+  Serial.println("Connected!"); // Print message when PS5 controller connects
 }
 
 void onDisConnect() {
-  Serial.println("Disconnected!");
-}
-
-void loop() {
-  if (ps5.Options()) { // Toggle modes with the Options button
-    autonomousMode = !autonomousMode;
-    delay(500); // Debounce delay
-  }
-  
-  // Check if the freeze button is pressed
-  if (digitalRead(FREEZE_BUTTON_PIN) == LOW && !isFrozen) {
-    isFrozen = true;
-    freezeStartTime = millis();
-    Serial.println("Robot frozen!");
-  }
-  
-  // Check if the freeze duration has elapsed
-  if (isFrozen && millis() - freezeStartTime >= 15000) {
-    isFrozen = false;
-    Serial.println("Robot unfrozen!");
-  }
-  
-  // controlMotors will handle both manual and autonomous modes
-  controlMotors();
+  Serial.println("Disconnected!"); // Print message when PS5 controller disconnects
 }
