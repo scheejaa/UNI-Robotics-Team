@@ -12,12 +12,14 @@ Servo servoRearRight;
 #define SERVO_FRONT_RIGHT_PIN 20
 #define SERVO_REAR_LEFT_PIN 21
 #define SERVO_REAR_RIGHT_PIN 22
-
 #define FREEZE_BUTTON_PIN 23 // Define the pin for the freeze button
-#define LED_PIN 12 // Define the pin for the LED
+#define LED_PIN 13 // Define the pin for the LED
 
 // Variables to manage timing and states
 unsigned long lastTimeStamp = 0;
+bool autonomousMode = false;
+bool isFrozen = false;
+unsigned long freezeStartTime = 0;
 bool autonomousMode = false; // Flag to indicate if the robot is in autonomous mode
 bool isFrozen = false; // Flag to indicate if the robot is frozen
 unsigned long freezeStartTime = 0; // Timestamp when the robot was frozen
@@ -29,12 +31,8 @@ void setup() {
   servoFrontRight.attach(SERVO_FRONT_RIGHT_PIN);
   servoRearLeft.attach(SERVO_REAR_LEFT_PIN);
   servoRearRight.attach(SERVO_REAR_RIGHT_PIN);
-
-  // Initialize the freeze button pin as input with pull-up resistor
-  pinMode(FREEZE_BUTTON_PIN, INPUT_PULLUP);
-
-  // Initialize the LED pin as output
-  pinMode(LED_PIN, OUTPUT);
+  pinMode(FREEZE_BUTTON_PIN, INPUT_PULLUP); // Initialize the freeze button pin
+  pinMode(LED_PIN, OUTPUT); // Initialize the LED pin as output
 
   // Initialize serial communication for debugging
   Serial.begin(115200);
@@ -43,7 +41,7 @@ void setup() {
   ps5.attach(notify);
   ps5.attachOnConnect(onConnect);
   ps5.attachOnDisconnect(onDisConnect);
-  ps5.begin("24:a6:fa:ca:d0:75"); // Replace with your PS5 controller MAC address
+  ps5.begin("24:a6:fa:ca:d0:75"); // your PS5 controller MAC address
 
   // Wait for the PS5 controller to connect
   while (!ps5.isConnected()) {
@@ -65,15 +63,20 @@ void loop() {
   if (digitalRead(FREEZE_BUTTON_PIN) == LOW && !isFrozen) {
     isFrozen = true; // Set frozen flag
     freezeStartTime = millis(); // Record the time when the robot was frozen
-    digitalWrite(LED_PIN, HIGH);  // Turn on LED
-    Serial.println("Robot frozen! Starting countdown...");
+    Serial.println("Robot frozen!");
+    digitalWrite(LED_PIN, HIGH); // Turn on the LED
   }
 
   // Check if the freeze duration (15 seconds) has elapsed
-  if (isFrozen && millis() - freezeStartTime >= 15000) {
-    isFrozen = false; // Unfreeze the robot
-    digitalWrite(LED_PIN, LOW);   // Turn off LED
-    Serial.println("Robot unfrozen!");
+  if (isFrozen) {
+    unsigned long elapsedTime = millis() - freezeStartTime;
+    Serial.print("Time remaining: ");
+    Serial.println(15 - elapsedTime / 1000); // Countdown
+    if (elapsedTime >= 15000) {
+      isFrozen = false; // Unfreeze the robot
+      Serial.println("Robot unfrozen!");
+      digitalWrite(LED_PIN, LOW); // Turn off the LED
+    }
   }
 
   // Check if the autonomous period (20 seconds) has elapsed
@@ -104,4 +107,39 @@ void controlMotors() {
   int rearLeftServoValue = map(leftStickY - leftStickX + rightStickX, -384, 384, 500, 2500);
   int rearRightServoValue = map(leftStickY + leftStickX - rightStickX, -384, 384, 500, 2500);
 
-  // Write the mapped values to
+  // Write the mapped values to the servos
+  servoFrontLeft.writeMicroseconds(frontLeftServoValue);
+  servoFrontRight.writeMicroseconds(frontRightServoValue);
+  servoRearLeft.writeMicroseconds(rearLeftServoValue);
+  servoRearRight.writeMicroseconds(rearRightServoValue);
+}
+
+void runAutonomous() {
+  // Simple autonomous code to move forward
+  servoFrontLeft.writeMicroseconds(1500);
+  servoFrontRight.writeMicroseconds(1500);
+  servoRearLeft.writeMicroseconds(1500);
+  servoRearRight.writeMicroseconds(1500);
+}
+
+void notify() {
+  // Print PS5 controller inputs for debugging
+  char messageString;
+  sprintf(messageString, "%4d,%4d,%4d,%4d,%3d,%3d,%3d,%3d,%3d,%3d,%3d,%3d,%3d,%3d,%3d,%3d,%3d,%3d,%3d,%3d,%3d,%3d,%3d,%3d",
+          ps5.LStickX(), ps5.LStickY(), ps5.RStickX(), ps5.RStickY(),
+          ps5.R2(), ps5.L2(), ps5.R1(), ps5.L1(), ps5.Square(), ps5.Cross(),
+          ps5.Circle(), ps5.Triangle(), ps5.Up(), ps5.Down(), ps5.Left(),
+          ps5.Right(), ps5.L1(), ps5.R1(), ps5.L2(), ps5.R2(), ps5.L3(),
+          ps5.R3(), ps5.Options(), ps5.Share());
+  Serial.println(messageString);
+  lastTimeStamp = millis();
+  controlMotors();
+}
+
+void onConnect() {
+  Serial.println("Connected!");
+}
+
+void onDisConnect() {
+  Serial.println("Disconnected!");
+}
