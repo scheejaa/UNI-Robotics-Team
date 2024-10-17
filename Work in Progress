@@ -20,10 +20,7 @@ unsigned long lastTimeStamp = 0;
 bool autonomousMode = false;
 bool isFrozen = false;
 unsigned long freezeStartTime = 0;
-bool autonomousMode = false; // Flag to indicate if the robot is in autonomous mode
-bool isFrozen = false; // Flag to indicate if the robot is frozen
-unsigned long freezeStartTime = 0; // Timestamp when the robot was frozen
-unsigned long autonomousStartTime = 0; // Timestamp when autonomous mode started
+unsigned long autonomousStartTime = 0;
 
 void setup() {
   // Attach servos to their respective pins
@@ -124,7 +121,7 @@ void runAutonomous() {
 
 void notify() {
   // Print PS5 controller inputs for debugging
-  char messageString;
+  char messageString[200];
   sprintf(messageString, "%4d,%4d,%4d,%4d,%3d,%3d,%3d,%3d,%3d,%3d,%3d,%3d,%3d,%3d,%3d,%3d,%3d,%3d,%3d,%3d,%3d,%3d,%3d,%3d",
           ps5.LStickX(), ps5.LStickY(), ps5.RStickX(), ps5.RStickY(),
           ps5.R2(), ps5.L2(), ps5.R1(), ps5.L1(), ps5.Square(), ps5.Cross(),
