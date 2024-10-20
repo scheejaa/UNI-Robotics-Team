@@ -28,18 +28,19 @@ void setup() {
   servoFrontRight.attach(SERVO_FRONT_RIGHT_PIN);
   servoRearLeft.attach(SERVO_REAR_LEFT_PIN);
   servoRearRight.attach(SERVO_REAR_RIGHT_PIN);
+  
   pinMode(FREEZE_BUTTON_PIN, INPUT_PULLUP); // Initialize the freeze button pin
   pinMode(LED_PIN, OUTPUT); // Initialize the LED pin as output
-
+  
   // Initialize serial communication for debugging
   Serial.begin(115200);
-
+  
   // Initialize PS5 controller and attach event handlers
   ps5.attach(notify);
   ps5.attachOnConnect(onConnect);
   ps5.attachOnDisconnect(onDisConnect);
   ps5.begin("24:a6:fa:ca:d0:75"); // your PS5 controller MAC address
-
+  
   // Wait for the PS5 controller to connect
   while (!ps5.isConnected()) {
     Serial.println("PS5 controller not found");
@@ -49,13 +50,14 @@ void setup() {
 }
 
 void loop() {
-  // Check if the Options button is pressed to start autonomous mode
-  if (ps5.Options()) {
+  static unsigned long lastDebounceTime = 0; // Debounce timing for Options button
+  
+  if (ps5.Options() && (millis() - lastDebounceTime > 50)) { // Debounce with a shorter delay
     autonomousMode = true; // Set autonomous mode flag
     autonomousStartTime = millis(); // Record the start time of autonomous mode
-    delay(500); // Debounce delay to prevent multiple triggers
+    lastDebounceTime = millis(); // Reset debounce timer
   }
-
+  
   // Check if the freeze button is pressed
   if (digitalRead(FREEZE_BUTTON_PIN) == LOW && !isFrozen) {
     isFrozen = true; // Set frozen flag
@@ -63,7 +65,7 @@ void loop() {
     Serial.println("Robot frozen!");
     digitalWrite(LED_PIN, HIGH); // Turn on the LED
   }
-
+  
   // Check if the freeze duration (15 seconds) has elapsed
   if (isFrozen) {
     unsigned long elapsedTime = millis() - freezeStartTime;
@@ -75,13 +77,13 @@ void loop() {
       digitalWrite(LED_PIN, LOW); // Turn off the LED
     }
   }
-
+  
   // Check if the autonomous period (20 seconds) has elapsed
   if (autonomousMode && millis() - autonomousStartTime >= 20000) {
     autonomousMode = false; // Switch back to driver control
     Serial.println("Switching to driver control.");
   }
-
+  
   // Control the robot based on the current mode and state
   if (!isFrozen) {
     if (autonomousMode) {
@@ -97,13 +99,13 @@ void controlMotors() {
   int leftStickY = ps5.LStickY();
   int leftStickX = ps5.LStickX();
   int rightStickX = ps5.RStickX();
-
+  
   // Map PS5 controller inputs to servo values
-  int frontLeftServoValue = map(leftStickY + leftStickX + rightStickX, -384, 384, 500, 2500);
-  int frontRightServoValue = map(leftStickY - leftStickX - rightStickX, -384, 384, 500, 2500);
-  int rearLeftServoValue = map(leftStickY - leftStickX + rightStickX, -384, 384, 500, 2500);
-  int rearRightServoValue = map(leftStickY + leftStickX - rightStickX, -384, 384, 500, 2500);
-
+  int frontLeftServoValue = map(leftStickY + leftStickX + rightStickX, -128, 127, 500, 2500);
+  int frontRightServoValue = map(leftStickY - leftStickX - rightStickX, -128, 127, 500, 2500);
+  int rearLeftServoValue = map(leftStickY - leftStickX + rightStickX, -128, 127, 500, 2500);
+  int rearRightServoValue = map(leftStickY + leftStickX - rightStickX, -128, 127, 500, 2500);
+  
   // Write the mapped values to the servos
   servoFrontLeft.writeMicroseconds(frontLeftServoValue);
   servoFrontRight.writeMicroseconds(frontRightServoValue);
@@ -120,17 +122,10 @@ void runAutonomous() {
 }
 
 void notify() {
-  // Print PS5 controller inputs for debugging
-  char messageString[200];
-  sprintf(messageString, "%4d,%4d,%4d,%4d,%3d,%3d,%3d,%3d,%3d,%3d,%3d,%3d,%3d,%3d,%3d,%3d,%3d,%3d,%3d,%3d,%3d,%3d,%3d,%3d",
-          ps5.LStickX(), ps5.LStickY(), ps5.RStickX(), ps5.RStickY(),
-          ps5.R2(), ps5.L2(), ps5.R1(), ps5.L1(), ps5.Square(), ps5.Cross(),
-          ps5.Circle(), ps5.Triangle(), ps5.Up(), ps5.Down(), ps5.Left(),
-          ps5.Right(), ps5.L1(), ps5.R1(), ps5.L2(), ps5.R2(), ps5.L3(),
-          ps5.R3(), ps5.Options(), ps5.Share());
-  Serial.println(messageString);
+  // Print minimal PS5 controller inputs for debugging
+  Serial.printf("LStickX: %d, LStickY: %d, RStickX: %d, RStickY: %d\n",
+                ps5.LStickX(), ps5.LStickY(), ps5.RStickX(), ps5.RStickY());
   lastTimeStamp = millis();
-  controlMotors();
 }
 
 void onConnect() {
