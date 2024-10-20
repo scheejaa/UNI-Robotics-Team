@@ -90,6 +90,7 @@ void controlMotors() {
 }
 
 void runAutonomous() {
+  Serial.println("Running autonomous mode"); // Debug statement
   servoFrontLeft.writeMicroseconds(1500);
   servoFrontRight.writeMicroseconds(1500);
   servoRearLeft.writeMicroseconds(1500);
