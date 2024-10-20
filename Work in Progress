@@ -78,10 +78,10 @@ void controlMotors() {
   int leftStickX = ps5.LStickX();
   int rightStickX = ps5.RStickX();
 
-  int frontLeftServoValue = map(leftStickY + leftStickX + rightStickX, -128, 127, 500, 2500);
-  int frontRightServoValue = map(leftStickY - leftStickX - rightStickX, -128, 127, 500, 2500);
-  int rearLeftServoValue = map(leftStickY - leftStickX + rightStickX, -128, 127, 500, 2500);
-  int rearRightServoValue = map(leftStickY + leftStickX - rightStickX, -128, 127, 500, 2500);
+  int frontLeftServoValue = map(leftStickY + leftStickX + rightStickX, -128, 127, 250, 2750);
+  int frontRightServoValue = map(leftStickY - leftStickX - rightStickX, -128, 127, 250, 2750);
+  int rearLeftServoValue = map(leftStickY - leftStickX + rightStickX, -128, 127, 250, 2750);
+  int rearRightServoValue = map(leftStickY + leftStickX - rightStickX, -128, 127, 250, 2750);
 
   servoFrontLeft.writeMicroseconds(frontLeftServoValue);
   servoFrontRight.writeMicroseconds(frontRightServoValue);
@@ -91,10 +91,10 @@ void controlMotors() {
 
 void runAutonomous() {
   Serial.println("Running autonomous mode"); // Debug statement
-  servoFrontLeft.writeMicroseconds(1500);
-  servoFrontRight.writeMicroseconds(1500);
-  servoRearLeft.writeMicroseconds(1500);
-  servoRearRight.writeMicroseconds(1500);
+  servoFrontLeft.writeMicroseconds(2000);
+  servoFrontRight.writeMicroseconds(2000);
+  servoRearLeft.writeMicroseconds(2000);
+  servoRearRight.writeMicroseconds(2000);
 }
 
 void notify() {
