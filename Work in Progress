@@ -39,7 +39,7 @@ void setup() {
   ps5.attach(notify);
   ps5.attachOnConnect(onConnect);
   ps5.attachOnDisconnect(onDisConnect);
-  ps5.begin("24:a6:fa:ca:d0:75"); // your PS5 controller MAC address
+  ps5.begin("84:30:95:de:d1:a2"); // your PS5 controller MAC address
   
   // Wait for the PS5 controller to connect
   while (!ps5.isConnected()) {
