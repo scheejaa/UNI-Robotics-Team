@@ -78,10 +78,10 @@ void controlMotors() {
   int leftStickX = ps5.LStickX();
   int rightStickX = ps5.RStickX();
 
-  int frontLeftServoValue = map(leftStickY + leftStickX + rightStickX, -128, 127, 250, 2750);
-  int frontRightServoValue = map(leftStickY - leftStickX - rightStickX, -128, 127, 250, 2750);
-  int rearLeftServoValue = map(leftStickY - leftStickX + rightStickX, -128, 127, 2750, 250);
-  int rearRightServoValue = map(leftStickY + leftStickX - rightStickX, -128, 127, 2750, 250);
+  int frontLeftServoValue = map(leftStickY + leftStickX + rightStickX, -128, 127, 2750, 250);
+  int frontRightServoValue = map(leftStickY - leftStickX - rightStickX, -128, 127, 2750, 250);
+  int rearLeftServoValue = map(leftStickY - leftStickX + rightStickX, -128, 127, 250, 2750);
+  int rearRightServoValue = map(leftStickY + leftStickX - rightStickX, -128, 127, 250, 2750);
 
   servoFrontLeft.writeMicroseconds(frontLeftServoValue);
   servoFrontRight.writeMicroseconds(frontRightServoValue);
