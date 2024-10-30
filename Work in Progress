@@ -1,30 +1,23 @@
 #include <ESP32Servo.h>
 #include <ps5Controller.h>
 
-// Servo objects for each wheel and smart servos
+// Declare servo objects for each wheel
 Servo servoFrontLeft, servoFrontRight, servoRearLeft, servoRearRight;
-Servo smartServo1, smartServo2;
 
-// Pin definitions
+// Define pin numbers for each servo and other components
 #define SERVO_FRONT_LEFT_PIN 19
 #define SERVO_FRONT_RIGHT_PIN 21
 #define SERVO_REAR_LEFT_PIN 22
 #define SERVO_REAR_RIGHT_PIN 23
-#define SMART_SERVO_1_PIN 24
-#define SMART_SERVO_2_PIN 25
-#define FREEZE_BUTTON_PIN 16
+#define FREEZE_BUTTON_PIN 4
 #define LED_PIN 13
-#define TRIG_PIN 34
-#define ECHO_PIN 35
 
-// Timing and state variables
+// Timing and state management variables
 unsigned long lastTimeStamp = 0;
 bool autonomousMode = false;
 bool isFrozen = false;
 unsigned long freezeStartTime = 0;
 unsigned long autonomousStartTime = 0;
-unsigned long forwardStartTime;
-bool reversing = false;
 
 void setup() {
   // Attach servos to their respective pins
@@ -32,23 +25,19 @@ void setup() {
   servoFrontRight.attach(SERVO_FRONT_RIGHT_PIN);
   servoRearLeft.attach(SERVO_REAR_LEFT_PIN);
   servoRearRight.attach(SERVO_REAR_RIGHT_PIN);
-  smartServo1.attach(SMART_SERVO_1_PIN);
-  smartServo2.attach(SMART_SERVO_2_PIN);
 
-  // Initialize pins
+  // Initialize the freeze button and LED pins
   pinMode(FREEZE_BUTTON_PIN, INPUT_PULLUP);
   pinMode(LED_PIN, OUTPUT);
-  pinMode(TRIG_PIN, OUTPUT);
-  pinMode(ECHO_PIN, INPUT);
 
-  // Start serial communication for debugging
+  // Initialize serial communication for debugging
   Serial.begin(115200);
 
   // Initialize PS5 controller and attach event handlers
   ps5.attach(notify);
   ps5.attachOnConnect(onConnect);
   ps5.attachOnDisconnect(onDisConnect);
-  ps5.begin("84:30:95:de:d1:a2"); // Your PS5 controller MAC address
+  ps5.begin("84:30:95:de:d1:a2"); // Replace with your PS5 controller MAC address
 
   // Wait for the PS5 controller to connect
   while (!ps5.isConnected()) {
@@ -59,47 +48,49 @@ void setup() {
 }
 
 void loop() {
-  // Measure distance using ultrasonic sensor
-  long distance = measureDistance();
-
-  // If an object is detected within 10 cm and the robot is not reversing, shut doors and reverse
-  if (distance < 10 && !reversing) {
-    shutDoors();
-    reversing = true;
-    unsigned long travelTime = millis() - forwardStartTime; // Calculate travel time
-    reverseRobot(travelTime); // Reverse for the same amount of time
-  }
-
-  // Check if the Options button is pressed to start autonomous mode
   if (ps5.Options() && millis() - lastTimeStamp > 50) {
     autonomousMode = true;
     autonomousStartTime = millis();
-    forwardStartTime = millis(); // Start tracking forward time
     lastTimeStamp = millis();
   }
 
-  // Check if the freeze button is pressed to freeze the robot
-  if (digitalRead(FREEZE_BUTTON_PIN) == LOW && !isFrozen) {
-    isFrozen = true;
-    freezeStartTime = millis();
-    Serial.println("Robot frozen!");
-    digitalWrite(LED_PIN, HIGH);
+  static unsigned char pinstatus;
+  pinstatus = (FREEZE_BUTTON_PIN & 0x04) >> 2;
+  if (pinstatus == 0x01) {
+    Serial.println("Input from pin is high");
   }
 
-  // Check if the freeze duration (15 seconds) has elapsed
+  if (digitalRead(FREEZE_BUTTON_PIN) == LOW && !isFrozen) {
+    isFrozen = true;
+    // Stop all servos
+    servoFrontLeft.writeMicroseconds(1500);
+    servoFrontRight.writeMicroseconds(1500);
+    servoRearLeft.writeMicroseconds(1500);
+    servoRearRight.writeMicroseconds(1500);
+    freezeStartTime = millis();
+    Serial.println("Robot frozen!");
+  }
+
+  if (isFrozen) {
+    if (millis() % 1000 < 500) {
+      digitalWrite(LED_PIN, HIGH); // LED on for 500ms
+    } else {
+      digitalWrite(LED_PIN, LOW); // LED off for 500ms
+    }
+  } else {
+    digitalWrite(LED_PIN, LOW); // Ensure LED is off when not frozen
+  }
+
   if (isFrozen && millis() - freezeStartTime >= 15000) {
     isFrozen = false;
     Serial.println("Robot unfrozen!");
-    digitalWrite(LED_PIN, LOW);
   }
 
-  // Check if the autonomous period (20 seconds) has elapsed
   if (autonomousMode && millis() - autonomousStartTime >= 20000) {
     autonomousMode = false;
     Serial.println("Switching to driver control.");
   }
 
-  // Control the robot based on the current mode and state
   if (!isFrozen) {
     if (autonomousMode) {
       runAutonomous();
@@ -107,24 +98,17 @@ void loop() {
       controlMotors();
     }
   }
-
-  // Check for X button press to move smart servos
-  if (ps5.Cross()) {
-    moveSmartServos();
-  }
 }
 
-// Function to control the motors in manual mode
 void controlMotors() {
   int leftStickY = ps5.LStickY();
   int leftStickX = ps5.LStickX();
-  int rightStickX = ps5.RStickX();
 
-  // Map PS5 controller inputs to servo values
-  int frontLeftServoValue = map(leftStickY + leftStickX + rightStickX, -128, 127, 2750, 250);
-  int frontRightServoValue = map(leftStickY - leftStickX - rightStickX, -128, 127, 2750, 250);
-  int rearLeftServoValue = map(leftStickY - leftStickX + rightStickX, -128, 127, 250, 2750);
-  int rearRightServoValue = map(leftStickY + leftStickX - rightStickX, -128, 127, 250, 2750);
+  // Map PS5 controller inputs to servo values for strafing
+  int frontLeftServoValue = map(-leftStickY + leftStickX, -128, 127, 250, 2750); 
+  int frontRightServoValue = map(-leftStickY - leftStickX, -128, 127, 250, 2750); 
+  int rearLeftServoValue = map(-leftStickY - leftStickX, -128, 127, 2750, 250); 
+  int rearRightServoValue = map(-leftStickY + leftStickX, -128, 127, 2750, 250);
 
   // Write the mapped values to the servos
   servoFrontLeft.writeMicroseconds(frontLeftServoValue);
@@ -133,7 +117,6 @@ void controlMotors() {
   servoRearRight.writeMicroseconds(rearRightServoValue);
 }
 
-// Function to run autonomous mode
 void runAutonomous() {
   Serial.println("Running autonomous mode");
   // Command the servos to move forward
@@ -143,41 +126,6 @@ void runAutonomous() {
   servoRearRight.writeMicroseconds(2000);
 }
 
-// Function to move smart servos to 90 degrees
-void moveSmartServos() {
-  Serial.println("Moving smart servos to 90 degrees");
-  smartServo1.write(90);  // Move to 90 degrees
-  smartServo2.write(90);  // Move to 90 degrees
-}
-
-// Function to measure distance using ultrasonic sensor
-long measureDistance() {
-  digitalWrite(TRIG_PIN, LOW);
-  delayMicroseconds(2);
-  digitalWrite(TRIG_PIN, HIGH);
-  delayMicroseconds(10);
-  digitalWrite(TRIG_PIN, LOW);
-
-  long duration = pulseIn(ECHO_PIN, HIGH);
-  long distance = (duration / 2) / 29.1;
-  return distance;
-}
-
-// Function to shut doors
-void shutDoors() {
-  Serial.println("Shutting doors");
-  // Add your door control code here
-}
-
-// Function to reverse the robot for the same amount of time it went forward
-void reverseRobot(unsigned long travelTime) {
-  Serial.println("Reversing");
-  // Add your reverse control code here
-  delay(travelTime); // Reverse for the same amount of time
-  reversing = false; // Reset flag
-}
-
-// PS5 controller notification function
 void notify() {
   if (millis() - lastTimeStamp >= 500) {
     Serial.printf("LStickX: %d, LStickY: %d, RStickX: %d, RStickY: %d\n",
@@ -186,12 +134,10 @@ void notify() {
   }
 }
 
-// PS5 controller connect event handler
 void onConnect() {
   Serial.println("Connected!");
 }
 
-// PS5 controller disconnect event handler
 void onDisConnect() {
   Serial.println("Disconnected!");
 }
