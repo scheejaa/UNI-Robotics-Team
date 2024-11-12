@@ -1,15 +1,18 @@
 #include <ESP32Servo.h>
 #include <ps5Controller.h>
 
+// Declare servo objects for each wheel
 Servo servoFrontLeft, servoFrontRight, servoRearLeft, servoRearRight;
 
+// Define pin numbers for each servo and other components
 #define SERVO_FRONT_LEFT_PIN 19
 #define SERVO_FRONT_RIGHT_PIN 21
 #define SERVO_REAR_LEFT_PIN 22
 #define SERVO_REAR_RIGHT_PIN 23
-#define FREEZE_BUTTON_PIN 16
-#define LED_PIN 13 
+#define FREEZE_BUTTON_PIN 4
+#define LED_PIN 13
 
+// Timing and state management variables
 unsigned long lastTimeStamp = 0;
 bool autonomousMode = false;
 bool isFrozen = false;
@@ -17,21 +20,26 @@ unsigned long freezeStartTime = 0;
 unsigned long autonomousStartTime = 0;
 
 void setup() {
+  // Attach servos to their respective pins
   servoFrontLeft.attach(SERVO_FRONT_LEFT_PIN);
   servoFrontRight.attach(SERVO_FRONT_RIGHT_PIN);
   servoRearLeft.attach(SERVO_REAR_LEFT_PIN);
   servoRearRight.attach(SERVO_REAR_RIGHT_PIN);
-  
-  pinMode(FREEZE_BUTTON_PIN, INPUT_PULLUP); 
-  pinMode(LED_PIN, OUTPUT); 
-  
+
+  // Initialize the freeze button and LED pins
+  pinMode(FREEZE_BUTTON_PIN, INPUT_PULLUP);
+  pinMode(LED_PIN, OUTPUT);
+
+  // Initialize serial communication for debugging
   Serial.begin(115200);
-  
+
+  // Initialize PS5 controller and attach event handlers
   ps5.attach(notify);
   ps5.attachOnConnect(onConnect);
   ps5.attachOnDisconnect(onDisConnect);
-  ps5.begin("84:30:95:de:d1:a2");
-  
+  ps5.begin("84:30:95:de:d1:a2"); // Replace with your PS5 controller MAC address
+
+  // Wait for the PS5 controller to connect
   while (!ps5.isConnected()) {
     Serial.println("PS5 controller not found");
     delay(300);
@@ -46,20 +54,39 @@ void loop() {
     lastTimeStamp = millis();
   }
 
+  static unsigned char pinstatus;
+  pinstatus = (FREEZE_BUTTON_PIN & 0x04) >> 2;
+  if (pinstatus == 0x01) {
+    Serial.println("Input from pin is high");
+  }
+
   if (digitalRead(FREEZE_BUTTON_PIN) == LOW && !isFrozen) {
     isFrozen = true;
+    // Stop all servos
+    servoFrontLeft.writeMicroseconds(1500);
+    servoFrontRight.writeMicroseconds(1500);
+    servoRearLeft.writeMicroseconds(1500);
+    servoRearRight.writeMicroseconds(1500);
     freezeStartTime = millis();
     Serial.println("Robot frozen!");
-    digitalWrite(LED_PIN, HIGH);
+  }
+
+  if (isFrozen) {
+    if (millis() % 1000 < 500) {
+      digitalWrite(LED_PIN, HIGH); // LED on for 500ms
+    } else {
+      digitalWrite(LED_PIN, LOW); // LED off for 500ms
+    }
+  } else {
+    digitalWrite(LED_PIN, LOW); // Ensure LED is off when not frozen
   }
 
   if (isFrozen && millis() - freezeStartTime >= 15000) {
     isFrozen = false;
     Serial.println("Robot unfrozen!");
-    digitalWrite(LED_PIN, LOW);
   }
-  
-  if (autonomousMode && millis() - autonomousStartTime >= 20000) {
+
+  if (autonomousMode && millis() - autonomousStartTime >= 7000) {
     autonomousMode = false;
     Serial.println("Switching to driver control.");
   }
@@ -78,11 +105,13 @@ void controlMotors() {
   int leftStickX = ps5.LStickX();
   int rightStickX = ps5.RStickX();
 
-  int frontLeftServoValue = map(leftStickY + leftStickX + rightStickX, -128, 127, 250, 2750);
-  int frontRightServoValue = map(leftStickY - leftStickX - rightStickX, -128, 127, 250, 2750);
-  int rearLeftServoValue = map(leftStickY - leftStickX + rightStickX, -128, 127, 2750, 250);
-  int rearRightServoValue = map(leftStickY + leftStickX - rightStickX, -128, 127, 2750, 250);
+  // Map PS5 controller inputs to servo values for strafing
+  int frontLeftServoValue = map(-leftStickX + leftStickY + rightStickX, -128, 127, 250, 2750); 
+  int frontRightServoValue = map(-leftStickX - leftStickY - rightStickX, -128, 127, 250, 2750); 
+  int rearLeftServoValue = map(-leftStickX - leftStickY + rightStickX, -128, 127, 2750, 250); 
+  int rearRightServoValue = map(-leftStickX + leftStickY - rightStickX, -128, 127, 2750, 250);
 
+  // Write the mapped values to the servos
   servoFrontLeft.writeMicroseconds(frontLeftServoValue);
   servoFrontRight.writeMicroseconds(frontRightServoValue);
   servoRearLeft.writeMicroseconds(rearLeftServoValue);
@@ -90,16 +119,17 @@ void controlMotors() {
 }
 
 void runAutonomous() {
-  Serial.println("Running autonomous mode"); // Debug statement
+  Serial.println("Running autonomous mode");
+  // Command the servos to move forward
   servoFrontLeft.writeMicroseconds(2000);
-  servoFrontRight.writeMicroseconds(2000);
+  servoFrontRight.writeMicroseconds(1000);
   servoRearLeft.writeMicroseconds(2000);
-  servoRearRight.writeMicroseconds(2000);
+  servoRearRight.writeMicroseconds(1000);
 }
 
 void notify() {
   if (millis() - lastTimeStamp >= 500) {
-    Serial.printf("LStickX: %d, LStickY: %d, RStickX: %d, RStickY: %d\n", 
+    Serial.printf("LStickX: %d, LStickY: %d, RStickX: %d, RStickY: %d\n",
                   ps5.LStickX(), ps5.LStickY(), ps5.RStickX(), ps5.RStickY());
     lastTimeStamp = millis();
   }
