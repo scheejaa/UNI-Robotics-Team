@@ -1,0 +1,97 @@
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
+#include <DHT.h>
+#include <ESP32Servo.h>
+#include <Adafruit_NeoPixel.h>
+
+// Define the LCD address and dimensions
+LiquidCrystal_I2C lcd(0x27, 16, 2);
+
+// Define the DHT sensor type and pin
+#define DHTTYPE DHT11 // or DHT22
+#define DHTPIN 2
+
+DHT dht(DHTPIN, DHTTYPE);
+
+// Declare servo objects for the motors
+Servo motorLeft, motorRight;
+
+// Define new pin numbers for the motors and other components
+#define MOTOR_LEFT_PIN 18
+#define MOTOR_RIGHT_PIN 19
+#define LED_PIN 13
+
+// Define NeoPixel ring pin and number of pixels
+#define NEOPIXEL_PIN 5
+#define NUMPIXELS 12
+
+Adafruit_NeoPixel pixels(NUMPIXELS, NEOPIXEL_PIN, NEO_GRB + NEO_KHZ800);
+
+void setup() {
+  // Attach motors to their respective pins
+  motorLeft.attach(MOTOR_LEFT_PIN);
+  motorRight.attach(MOTOR_RIGHT_PIN);
+
+  // Initialize the LED pin
+  pinMode(LED_PIN, OUTPUT);
+
+  // Initialize serial communication for debugging
+  Serial.begin(115200);
+
+  // Initialize LCD and DHT sensor
+  lcd.begin();
+  lcd.backlight();
+  dht.begin();
+
+  // Initialize NeoPixel ring
+  pixels.begin();
+  pixels.show(); // Initialize all pixels to 'off'
+}
+
+void loop() {
+  float tempC = dht.readTemperature();
+  float tempF = dht.readTemperature(true);
+
+  if (isnan(tempC) || isnan(tempF)) {
+    lcd.setCursor(0, 0);
+    lcd.print("Error reading");
+    lcd.setCursor(0, 1);
+    lcd.print("temperature");
+  } else {
+    lcd.setCursor(0, 0);
+    lcd.print("Temp: ");
+    lcd.print(tempC);
+    lcd.print(" C");
+
+    lcd.setCursor(0, 1);
+    lcd.print("Temp: ");
+    lcd.print(tempF);
+    lcd.print(" F");
+
+    // Set NeoPixel color based on temperature
+    if (tempF < 50) {
+      setNeoPixelColor(0, 0, 255); // Blue
+    } else if (tempF >= 51 && tempF <= 69) {
+      setNeoPixelColor(255, 255, 0); // Yellow
+    } else {
+      setNeoPixelColor(255, 0, 0); // Red
+    }
+  }
+
+  if (tempF > 60) {
+    // Move both motors forward
+    motorLeft.writeMicroseconds(2000);
+    motorRight.writeMicroseconds(2000);
+  } else {
+    // Move both motors backward
+    motorLeft.writeMicroseconds(1000);
+    motorRight.writeMicroseconds(1000);
+  }
+}
+
+void setNeoPixelColor(uint8_t r, uint8_t g, uint8_t b) {
+  for (int i = 0; i < NUMPIXELS; i++) {
+    pixels.setPixelColor(i, pixels.Color(r, g, b));
+  }
+  pixels.show();
+}
