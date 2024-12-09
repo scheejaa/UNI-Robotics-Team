@@ -1,97 +1,99 @@
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
-#include <DHT.h>
+#include <OneWire.h>
+#include <DallasTemperature.h>
 #include <ESP32Servo.h>
 #include <Adafruit_NeoPixel.h>
 
 // Define the LCD address and dimensions
 LiquidCrystal_I2C lcd(0x27, 16, 2);
 
-// Define the DHT sensor type and pin
-#define DHTTYPE DHT11 // or DHT22
-#define DHTPIN 2
+// Define the DS18B20 sensor pin
+#define ONE_WIRE_BUS 15
 
-DHT dht(DHTPIN, DHTTYPE);
+OneWire oneWire(ONE_WIRE_BUS);  // Setup a oneWire instance to communicate with DS18B20
+DallasTemperature sensors(&oneWire);  // Pass our oneWire reference to Dallas Temperature.
 
-// Declare servo objects for the motors
-Servo motorLeft, motorRight;
+Servo motorLeft, motorRight;  // Declare servo objects for the motors
 
-// Define new pin numbers for the motors and other components
+// Define pin numbers for the motors and other components
 #define MOTOR_LEFT_PIN 18
 #define MOTOR_RIGHT_PIN 19
 #define LED_PIN 13
 
 // Define NeoPixel ring pin and number of pixels
-#define NEOPIXEL_PIN 5
+#define NEOPIXEL_PIN 2
 #define NUMPIXELS 12
 
+// Initialize Adafruit NeoPixel object
 Adafruit_NeoPixel pixels(NUMPIXELS, NEOPIXEL_PIN, NEO_GRB + NEO_KHZ800);
 
 void setup() {
-  // Attach motors to their respective pins
-  motorLeft.attach(MOTOR_LEFT_PIN);
-  motorRight.attach(MOTOR_RIGHT_PIN);
+  motorLeft.attach(MOTOR_LEFT_PIN);  // Attach left motor to pin
+  motorRight.attach(MOTOR_RIGHT_PIN);  // Attach right motor to pin
 
-  // Initialize the LED pin
-  pinMode(LED_PIN, OUTPUT);
+  pinMode(LED_PIN, OUTPUT);  // Initialize the LED pin
 
-  // Initialize serial communication for debugging
-  Serial.begin(115200);
+  Serial.begin(115200);  // Initialize serial communication for debugging
 
-  // Initialize LCD and DHT sensor
-  lcd.begin();
-  lcd.backlight();
-  dht.begin();
+  lcd.begin();  // Initialize the LCD
+  lcd.backlight();  // Turn on the LCD backlight
+  sensors.begin();  // Initialize the DS18B20 sensor
 
-  // Initialize NeoPixel ring
-  pixels.begin();
-  pixels.show(); // Initialize all pixels to 'off'
+  pixels.begin();  // Initialize NeoPixel ring
+  pixels.show();  // Initialize all pixels to 'off'
 }
 
 void loop() {
-  float tempC = dht.readTemperature();
-  float tempF = dht.readTemperature(true);
+  sensors.requestTemperatures();  // Request temperature readings
+  float tempC = sensors.getTempCByIndex(0);  // Get temperature in Celsius
+  float tempF = sensors.getTempFByIndex(0);  // Get temperature in Fahrenheit
 
-  if (isnan(tempC) || isnan(tempF)) {
-    lcd.setCursor(0, 0);
-    lcd.print("Error reading");
-    lcd.setCursor(0, 1);
-    lcd.print("temperature");
+  if (tempC == DEVICE_DISCONNECTED_C || tempF == DEVICE_DISCONNECTED_F) {
+    lcd.setCursor(0, 0);  // Set LCD cursor to column 0, line 0
+    lcd.print("Error reading");  // Print error message on LCD
+    lcd.setCursor(0, 1);  // Set LCD cursor to column 0, line 1
+    lcd.print("temperature");  // Print error message on LCD
   } else {
-    lcd.setCursor(0, 0);
-    lcd.print("Temp: ");
-    lcd.print(tempC);
+    lcd.setCursor(0, 0);  // Set LCD cursor to column 0, line 0
+    lcd.print("Temp: ");  // Print temperature label on LCD
+    lcd.print(tempC);  // Print temperature in Celsius on LCD
     lcd.print(" C");
 
-    lcd.setCursor(0, 1);
-    lcd.print("Temp: ");
-    lcd.print(tempF);
+    lcd.setCursor(0, 1);  // Set LCD cursor to column 0, line 1
+    lcd.print("Temp: ");  // Print temperature label on LCD
+    lcd.print(tempF);  // Print temperature in Fahrenheit on LCD
     lcd.print(" F");
 
     // Set NeoPixel color based on temperature
     if (tempF < 50) {
-      setNeoPixelColor(0, 0, 255); // Blue
-    } else if (tempF >= 51 && tempF <= 69) {
-      setNeoPixelColor(255, 255, 0); // Yellow
+      setNeoPixelColor(0, 0, 255);  // Blue color for low temperatures
+    } else if (tempF >= 50 && tempF <= 80) {
+      setNeoPixelColor(255, 255, 0);  // Yellow color for moderate temperatures
     } else {
-      setNeoPixelColor(255, 0, 0); // Red
+      setNeoPixelColor(255, 0, 0);  // Red color for high temperatures
     }
   }
 
-  if (tempF > 60) {
-    // Move both motors forward
-    motorLeft.writeMicroseconds(2000);
-    motorRight.writeMicroseconds(2000);
+  // Control motor speed and direction based on temperature
+  if (tempF > 78) {
+    int speed = map(tempF, 78, 100, 1500, 2000);  // Map temperature to speed (forward)
+    motorLeft.writeMicroseconds(speed);  // Set left motor speed
+    motorRight.writeMicroseconds(3000 - speed);  // Ensure both motors go in the same direction
+  } else if (tempF < 75) {
+    int speed = map(tempF, 0, 75, 1500, 1000);  // Map temperature to speed (backward)
+    motorLeft.writeMicroseconds(speed);  // Set left motor speed
+    motorRight.writeMicroseconds(3000 - speed);  // Ensure both motors go in the same direction
   } else {
-    // Move both motors backward
-    motorLeft.writeMicroseconds(1000);
-    motorRight.writeMicroseconds(1000);
+    // Stop motors
+    motorLeft.writeMicroseconds(1500);  // Stop left motor
+    motorRight.writeMicroseconds(1500);  // Stop right motor
   }
 }
 
 void setNeoPixelColor(uint8_t r, uint8_t g, uint8_t b) {
   for (int i = 0; i < NUMPIXELS; i++) {
-    pixels.setPixelColor(i, pixels.Color(r, g, b));
+    pixels.setPixelColor(i, pixels.Color(r, g, b));  // Set color of each pixel
   }
-  pixels.show();
+  pixels.show();  // Update NeoPixel colors
 }
